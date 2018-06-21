@@ -19,6 +19,7 @@ public class AntColonyBasedSegmentation {
     private float initialAntSeedProbability = 0.04f; // seed ants on 4 percent of pixels at the beginning
     private float alpha = 0.5f;
     private float beta = 0.5f;
+    private float evaporationConstant = 0.9f;
 
 
     private ClearCLIJ clij;
@@ -29,6 +30,7 @@ public class AntColonyBasedSegmentation {
     private ClearCLImage pheromone;
     private ClearCLImage temp1;
     private ClearCLImage temp2;
+    private ClearCLImage temp3;
 
     private ClearCLImage ants;
 
@@ -45,6 +47,7 @@ public class AntColonyBasedSegmentation {
         pheromone = clij.createCLImage(input.getDimensions(), ImageChannelDataType.UnsignedInt8);
         temp1 = clij.createCLImage(input.getDimensions(), ImageChannelDataType.UnsignedInt8);
         temp2 = clij.createCLImage(input.getDimensions(), ImageChannelDataType.UnsignedInt8);
+        temp3 = clij.createCLImage(input.getDimensions(), ImageChannelDataType.UnsignedInt8);
 
         ants = clij.createCLImage(input.getDimensions(), ImageChannelDataType.UnsignedInt8);
         random = clij.createCLImage(input.getDimensions(), ImageChannelDataType.UnsignedInt8);
@@ -75,17 +78,32 @@ public class AntColonyBasedSegmentation {
         parameters.put("beta", beta);
         clij.execute(ACO.class, "aco.cl", "aco_path_planning_3d", parameters);
 
-        clij.show(ants, "ants before");
-        clij.show(temp1, "ants after");
-
-        // measure mean pheromone among ants
-
-        // seed descendants
+        clij.show(ants, "ants");
 
         // update pheromone
+        Kernels.mask(clij, input, temp1, temp2);
 
         // evaporate pheromone
+        Kernels.addWeightedPixelwise(clij, pheromone, temp2, temp3, evaporationConstant, 1.0f - evaporationConstant);
 
+        // diffuse pheromone
+        Kernels.blur(clij, temp3, pheromone, 6,6,6, 2,2,2);
+
+        // measure mean pheromone among ants
+        Kernels.mask(clij, pheromone, temp1, temp2);
+        float meanPheromone = (float)(Kernels.sumPixels(clij, temp2) / Kernels.sumPixels(clij, temp1));
+
+        // seed descendants
+        randomize(clij, random, 0, 255);
+        parameters.clear();
+        parameters.put("srcAnts", temp1);
+        parameters.put("dstAnts", ants);
+        parameters.put("srcPheromone", pheromone);
+        parameters.put("srcRandom", random);
+        parameters.put("pheromoneThreshold", new Float(meanPheromone));
+        clij.execute(ACO.class, "aco.cl", "aco_seed_descendants_3d", parameters);
+
+        clij.show(pheromone, "pheromone");
     }
 
     public void cleanup() {

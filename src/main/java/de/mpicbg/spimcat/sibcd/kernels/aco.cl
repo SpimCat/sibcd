@@ -51,3 +51,51 @@ __kernel void aco_path_planning_3d
     }
   }
 }
+
+__kernel void aco_seed_descendants_3d
+(
+  DTYPE_IMAGE_OUT_3D dstAnts,
+  DTYPE_IMAGE_IN_3D srcAnts,
+  DTYPE_IMAGE_IN_3D srcPheromone,
+  DTYPE_IMAGE_IN_3D srcRandom,
+  float pheromoneThreshold
+) {
+
+  const int i = get_global_id(0), j = get_global_id(1), k = get_global_id(2);
+  const int4 coord = (int4)(i,j,k,0);
+
+  const int4   c = (int4)  (1, 1, 1, 0 );
+
+  // if there is an ant already, leave
+    float ant = READ_IMAGE(srcAnts, sampler, coord).x;
+    if (ant > 0) {
+      // copy pre-existing ants
+      WRITE_IMAGE(dstAnts,coord, (DTYPE_OUT)ant);
+      return;
+    }
+
+    float antsInNeighborhood = 0;
+    for (int x = -c.x; x <= c.x; x++) {
+      for (int y = -c.y; y <= c.y; y++) {
+        for (int z = -c.z; z <= c.z; z++) {
+
+          // if there is an ant and its at a location where there is enough pheromone
+          if (READ_IMAGE(srcAnts,sampler,coord+(int4)(x,y,z,0)).x > 0 &&
+              READ_IMAGE(srcPheromone,sampler,coord+(int4)(x,y,z,0)).x > pheromoneThreshold) {
+            antsInNeighborhood ++;
+          }
+        }
+      }
+    }
+
+    if (antsInNeighborhood * 255 / 27 > READ_IMAGE(srcRandom,sampler,coord).x) {
+      WRITE_IMAGE(dstAnts,coord,(DTYPE_OUT)1.0);
+    } else {
+      WRITE_IMAGE(dstAnts,coord,(DTYPE_OUT)0.0);
+    }
+
+}
+
+
+
+

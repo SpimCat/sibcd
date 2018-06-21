@@ -37,7 +37,10 @@ public class AntColonyBasedSegmentationDemo
 
         AntColonyBasedSegmentation acbs = new AntColonyBasedSegmentation(clij, input, output);
         acbs.initialize();
-        acbs.exec();
+        for (int i = 0; i < 10; i++) {
+          acbs.exec();
+        }
+        acbs.cleanup();
 
         System.out.println("spots: " + Kernels.sumPixels(clij, output));
 
